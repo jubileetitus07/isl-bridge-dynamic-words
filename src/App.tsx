@@ -11,6 +11,7 @@ import SignToText from "./pages/SignToText";
 import TextToSign from "./pages/TextToSign";
 import Dictionary from "./pages/Dictionary";
 import About from "./pages/About";
+import Setup from "./pages/Setup";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="text-to-sign" element={<TextToSign />} />
             <Route path="dictionary" element={<Dictionary />} />
             <Route path="about" element={<About />} />
+            <Route path="setup" element={<Setup />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
