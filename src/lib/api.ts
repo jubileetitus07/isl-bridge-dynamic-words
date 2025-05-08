@@ -1,4 +1,5 @@
 
+// You can change this URL if your backend runs on a different address
 const API_BASE_URL = "http://localhost:5000/api";
 
 export interface SignToTextResponse {
