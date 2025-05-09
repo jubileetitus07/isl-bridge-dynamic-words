@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import base64
@@ -10,7 +9,7 @@ from ml_utils import predict_sign, initialize_model
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all domains on all routes
+CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for all domains on all /api routes
 
 # Ensure directories exist
 os.makedirs('static/images/signs', exist_ok=True)
