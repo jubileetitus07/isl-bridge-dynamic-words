@@ -12,7 +12,10 @@ export interface TextToSignResponse {
   signs: Array<{
     sign: string;
     image_path: string;
+    match_type?: "exact" | "stemmed" | "partial";
+    original?: string;
   }>;
+  unmatched_words?: string[];
   error?: string;
 }
 
@@ -21,6 +24,12 @@ export interface DictionaryResponse {
     name: string;
     image_path: string;
   }>;
+  error?: string;
+}
+
+export interface AddSignResponse {
+  status: string;
+  message?: string;
   error?: string;
 }
 
@@ -99,5 +108,27 @@ export const getISLDictionary = async (): Promise<DictionaryResponse> => {
   } catch (error) {
     console.error("Error fetching ISL dictionary:", error);
     return { signs: [], error: (error as Error).message };
+  }
+};
+
+export const addSign = async (name: string, imagePath: string): Promise<AddSignResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/add-sign`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name, image_path: imagePath }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to add sign");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error adding sign:", error);
+    return { status: "error", error: (error as Error).message };
   }
 };

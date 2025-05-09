@@ -13,16 +13,19 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { translateTextToSign } from "@/lib/api";
-import { MessageSquareText, Send, RefreshCcw, Loader2 } from "lucide-react";
+import { MessageSquareText, Send, RefreshCcw, Loader2, AlertCircle } from "lucide-react";
 
 interface SignImage {
   sign: string;
   image_path: string;
+  match_type?: "exact" | "stemmed" | "partial";
+  original?: string;
 }
 
 const TextToSign = () => {
   const [inputText, setInputText] = useState("");
   const [signImages, setSignImages] = useState<SignImage[]>([]);
+  const [unmatchedWords, setUnmatchedWords] = useState<string[]>([]);
   const [isTranslating, setIsTranslating] = useState(false);
   const [recentTranslations, setRecentTranslations] = useState<string[]>([]);
   const { toast } = useToast();
@@ -52,6 +55,7 @@ const TextToSign = () => {
       }
       
       setSignImages(result.signs);
+      setUnmatchedWords(result.unmatched_words || []);
       
       // Add to recent translations if not already there
       if (!recentTranslations.includes(inputText)) {
@@ -80,6 +84,7 @@ const TextToSign = () => {
   const clearTranslation = () => {
     setInputText("");
     setSignImages([]);
+    setUnmatchedWords([]);
   };
 
   const useRecentTranslation = (text: string) => {
@@ -88,7 +93,7 @@ const TextToSign = () => {
     // handleTranslate();
   };
 
-  // Function to render placeholder if image path doesn't exist
+  // Function to render sign image with match information
   const renderSignImage = (sign: SignImage) => {
     const imageUrl = `http://localhost:5000${sign.image_path}`;
     
@@ -105,7 +110,14 @@ const TextToSign = () => {
             }}
           />
         </div>
-        <p className="mt-2 text-sm text-center">{sign.sign}</p>
+        <div className="mt-2 text-center">
+          <p className="font-medium">{sign.sign}</p>
+          {sign.match_type && sign.match_type !== "exact" && sign.original && (
+            <p className="text-xs text-muted-foreground">
+              {sign.match_type === "stemmed" ? "Stem of" : "Similar to"}: {sign.original}
+            </p>
+          )}
+        </div>
       </div>
     );
   };
@@ -181,7 +193,7 @@ const TextToSign = () => {
         )}
 
         {/* Translation Results */}
-        {signImages.length > 0 && (
+        {(signImages.length > 0 || unmatchedWords.length > 0) && (
           <Card className="mt-8">
             <CardHeader>
               <CardTitle>Sign Language Translation</CardTitle>
@@ -190,15 +202,42 @@ const TextToSign = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {signImages.map((sign, index) => (
-                  <div key={index}>{renderSignImage(sign)}</div>
-                ))}
-              </div>
+              {/* Matched signs */}
+              {signImages.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-medium mb-4">Matched Signs</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    {signImages.map((sign, index) => (
+                      <div key={index}>{renderSignImage(sign)}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Unmatched words */}
+              {unmatchedWords.length > 0 && (
+                <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-md">
+                  <div className="flex items-start">
+                    <AlertCircle className="h-5 w-5 text-amber-600 mr-2 mt-0.5" />
+                    <div>
+                      <h3 className="text-sm font-medium text-amber-800">
+                        Words without matching signs ({unmatchedWords.length}):
+                      </h3>
+                      <p className="text-sm text-amber-700 mt-1">
+                        {unmatchedWords.join(", ")}
+                      </p>
+                      <p className="text-xs text-amber-600 mt-2">
+                        These words don't have matching signs in our dictionary. In a complete implementation, 
+                        these would be finger-spelled using the manual alphabet.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
             <CardFooter>
               <p className="text-sm text-muted-foreground">
-                Note: Some signs may be approximated or finger-spelled when an exact sign is unavailable.
+                Note: Signs may be approximated when an exact match is unavailable.
               </p>
             </CardFooter>
           </Card>
@@ -229,6 +268,10 @@ const TextToSign = () => {
                 </li>
                 <li>
                   For best results, use simple, clear sentences and common vocabulary
+                </li>
+                <li>
+                  Words may be matched exactly, by their stem (removing endings like -ing, -ed), 
+                  or by finding similar words in our dictionary
                 </li>
               </ul>
             </div>
