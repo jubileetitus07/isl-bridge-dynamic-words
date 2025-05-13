@@ -6,7 +6,8 @@ import cv2
 import numpy as np
 import os
 import json
-from ml_utils import predict_sign, initialize_model
+import time
+from ml_utils import predict_sign, initialize_model, extract_hand_landmarks
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -15,6 +16,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for all domain
 # Ensure directories exist
 os.makedirs('static/images/signs', exist_ok=True)
 os.makedirs('static/models', exist_ok=True)
+os.makedirs('static/gesture_sequences', exist_ok=True)
 
 # Initialize model
 print("Initializing sign language recognition model...")
@@ -70,6 +72,12 @@ SIGNS_DICT = load_signs_data()
 # Store the current sign sequence
 current_sequence = []
 
+# Store gesture history for dynamic gesture recognition
+gesture_history = []
+gesture_timestamps = []
+MAX_HISTORY_LENGTH = 30  # Maximum number of frames to keep in history
+SEQUENCE_TIMEOUT = 2.0   # Time in seconds before considering a new gesture sequence
+
 @app.route('/api/sign-to-text', methods=['POST'])
 def sign_to_text():
     try:
@@ -91,96 +99,104 @@ def sign_to_text():
         if image is None:
             return jsonify({"error": "Failed to decode image"}), 400
 
+        # Extract hand landmarks for tracking
+        landmarks, hand_detected = extract_hand_landmarks(image)
+        
+        # Get current timestamp
+        current_time = time.time()
+        
+        # Update gesture history with timestamps
+        if hand_detected:
+            gesture_history.append(landmarks)
+            gesture_timestamps.append(current_time)
+            
+            # Keep history within size limit
+            while len(gesture_history) > MAX_HISTORY_LENGTH:
+                gesture_history.pop(0)
+                gesture_timestamps.pop(0)
+        
         # Predict the sign using the ML model
         predicted_sign, confidence = predict_sign(image)
         
+        # Add debug info about landmarks
+        hand_info = {}
+        if hand_detected:
+            # Get some basic hand information for debugging
+            points = landmarks.reshape(-1, 3)
+            hand_info = {
+                "num_landmarks": len(points),
+                "thumb_tip": points[4].tolist() if len(points) > 4 else None,
+                "index_tip": points[8].tolist() if len(points) > 8 else None,
+                "history_length": len(gesture_history)
+            }
+        
+        # Check for gesture sequence based on recent history
+        gesture_sequence = None
+        if len(gesture_timestamps) >= 2:
+            # If we have a sufficient history and the gesture spans across at least 0.5 seconds
+            if gesture_timestamps[-1] - gesture_timestamps[0] > 0.5:
+                # Here we would analyze the sequence for dynamic gestures
+                # For now, just indicate that we detected a sequence
+                gesture_sequence = {
+                    "duration": gesture_timestamps[-1] - gesture_timestamps[0],
+                    "frame_count": len(gesture_history)
+                }
+        
         return jsonify({
             "sign": predicted_sign,
-            "confidence": confidence
+            "confidence": confidence,
+            "hand_detected": hand_detected,
+            "hand_info": hand_info,
+            "gesture_sequence": gesture_sequence
         })
     
     except Exception as e:
         print(f"Error in sign-to-text: {str(e)}")
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
-@app.route('/api/text-to-sign', methods=['POST'])
-def text_to_sign():
+@app.route('/api/track-dynamic-gesture', methods=['POST'])
+def track_dynamic_gesture():
+    """
+    Endpoint for processing a sequence of hand positions for dynamic gesture recognition
+    """
     try:
         data = request.json
-        if 'text' not in data:
-            return jsonify({"error": "No text provided"}), 400
-
-        text = data['text'].lower().strip()
-        words = text.split()
+        if 'sequence' not in data or not isinstance(data['sequence'], list):
+            return jsonify({"error": "No valid sequence data provided"}), 400
+            
+        sequence = data['sequence']
         
-        signs = []
-        unmatched_words = []
+        # Here you would process the sequence for dynamic gesture recognition
+        # This would typically involve:
+        # 1. Normalization of the sequence
+        # 2. Feature extraction
+        # 3. Passing to a sequential model (RNN/LSTM/etc)
         
-        for word in words:
-            original_word = word
-            # Try exact match
-            if word in SIGNS_DICT:
-                signs.append({
-                    "sign": word,
-                    "image_path": SIGNS_DICT[word],
-                    "match_type": "exact"
-                })
-            else:
-                # Try stemming (remove common suffixes)
-                stemmed = word
-                for suffix in ['s', 'es', 'ed', 'ing', 'er', 'est']:
-                    if word.endswith(suffix) and word[:-len(suffix)] in SIGNS_DICT:
-                        stemmed = word[:-len(suffix)]
-                        signs.append({
-                            "sign": stemmed,
-                            "image_path": SIGNS_DICT[stemmed],
-                            "match_type": "stemmed",
-                            "original": original_word
-                        })
-                        break
-                # If stemming didn't help, look for partial matches
-                else:
-                    found_partial = False
-                    for sign in SIGNS_DICT:
-                        # Check if word contains sign or sign contains word
-                        if (word in sign and len(word) > 2) or (sign in word and len(sign) > 2):
-                            signs.append({
-                                "sign": sign,
-                                "image_path": SIGNS_DICT[sign],
-                                "match_type": "partial",
-                                "original": original_word
-                            })
-                            found_partial = True
-                            break
-                    
-                    # If no match found at all, track the word for potential finger-spelling
-                    if not found_partial:
-                        unmatched_words.append(original_word)
+        # For demonstration, we'll return a simple analysis of the sequence
+        seq_length = len(sequence)
         
-        # For words that couldn't be matched, we could implement finger-spelling
-        # For now, we'll just note that they weren't matched
-        if unmatched_words:
-            # In a more advanced implementation, we would add finger-spelling here
-            # For now, we'll just include the words as "unmatched" in the response
-            pass
+        # Mock dynamic gesture recognition (would be replaced by actual ML model)
+        recognizable_gestures = ["hello", "thank you", "please", "yes", "no"]
         
-        global current_sequence
-        current_sequence = signs
+        if seq_length < 5:
+            predicted_gesture = "unknown"
+            confidence = 0.2
+        else:
+            # In a real implementation, this would use a trained model
+            predicted_gesture = np.random.choice(recognizable_gestures)
+            confidence = np.random.uniform(0.6, 0.95)
         
         return jsonify({
-            "signs": signs, 
-            "unmatched_words": unmatched_words
+            "gesture": predicted_gesture,
+            "confidence": float(confidence),
+            "sequence_length": seq_length
         })
-    
+        
     except Exception as e:
-        print(f"Error in text-to-sign: {str(e)}")
+        print(f"Error in track-dynamic-gesture: {str(e)}")
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
-@app.route('/api/clear-sequence', methods=['POST'])
-def clear_sequence():
-    global current_sequence
-    current_sequence = []
-    return jsonify({"status": "success"})
+# ... keep existing code (text-to-sign endpoint, clear-sequence endpoint)
 
 @app.route('/api/isl-dictionary', methods=['GET'])
 def get_dictionary():
@@ -220,6 +236,17 @@ def add_sign():
     except Exception as e:
         print(f"Error adding sign: {str(e)}")
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """
+    Simple health check endpoint
+    """
+    return jsonify({
+        "status": "healthy",
+        "timestamp": time.time(),
+        "version": "1.0.0"
+    })
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

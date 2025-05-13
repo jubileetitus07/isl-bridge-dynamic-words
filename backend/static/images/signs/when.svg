@@ -1,7 +1,36 @@
 
 <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
   <rect width="100%" height="100%" fill="#f0f0f0"/>
-  <circle cx="100" cy="80" r="30" fill="none" stroke="#000000" stroke-width="2"/>
-  <path d="M100,60 L100,80 L120,80" stroke="#000000" stroke-width="2" stroke-linecap="round" />
+  <!-- Hand shape for "when" in ISL -->
+  <g transform="translate(100, 85) scale(0.8)">
+    <!-- Palm -->
+    <path d="M-15,-35 Q-25,-20 -25,0 Q-25,20 -15,35 L15,35 Q25,20 25,0 Q25,-20 15,-35 Z" fill="#ffdbac" stroke="#000000" stroke-width="1.5"/>
+    
+    <!-- Thumb -->
+    <path d="M-15,-15 Q-30,-10 -35,5" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round"/>
+    
+    <!-- Index finger -->
+    <path d="M-5,-35 L-5,-50" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round"/>
+    
+    <!-- Middle finger -->
+    <path d="M5,-35 L5,-50" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round"/>
+    
+    <!-- Ring finger -->
+    <path d="M12,-32 L12,-45" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round"/>
+    
+    <!-- Pinky -->
+    <path d="M18,-25 L18,-35" fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round"/>
+    
+    <!-- Clock indicator -->
+    <circle cx="0" cy="-15" r="20" fill="none" stroke="#5050ff" stroke-width="1.5" stroke-dasharray="3,2"/>
+    <path d="M0,-15 L0,-30" stroke="#5050ff" stroke-width="2" stroke-linecap="round"/>
+    <path d="M0,-15 L10,-10" stroke="#5050ff" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Rotation indicator -->
+    <path d="M-25,-25 A30,30 0 0 1 -10,-40" fill="none" stroke="#5050ff" stroke-width="2" stroke-dasharray="4,2"/>
+    <path d="M-10,-40 L-15,-42 L-12,-35" fill="#5050ff"/>
+  </g>
+  
   <text x="100" y="150" text-anchor="middle" font-family="Arial" font-size="24" font-weight="bold">When</text>
+  <text x="100" y="175" text-anchor="middle" font-family="Arial" font-size="14" fill="#666">Pointing to wrist/clock</text>
 </svg>

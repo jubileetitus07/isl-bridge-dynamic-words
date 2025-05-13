@@ -14,6 +14,10 @@ import { useToast } from "@/components/ui/use-toast";
 import useWebcam from "@/hooks/useWebcam";
 import { translateSignToText } from "@/lib/api";
 import { Camera, Pause, Play, Delete, Copy, HandMetal } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { InfoIcon } from "lucide-react";
 
 const SignToText = () => {
   const [recognizedText, setRecognizedText] = useState("");
@@ -21,6 +25,10 @@ const SignToText = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [captureInterval, setCaptureInterval] = useState<number | null>(null);
+  const [handDetected, setHandDetected] = useState(false);
+  const [confidenceLevel, setConfidenceLevel] = useState(0);
+  const [detectionMode, setDetectionMode] = useState<"static" | "dynamic">("static");
+  const [gestureSequence, setGestureSequence] = useState<any>(null);
   const { toast } = useToast();
 
   const {
@@ -104,6 +112,20 @@ const SignToText = () => {
         console.error("Translation error:", result.error);
         return;
       }
+      
+      // Update UI based on hand detection
+      setHandDetected(result.hand_detected || false);
+      setConfidenceLevel(result.confidence * 100 || 0);
+      
+      // Update gesture sequence info if available
+      if (result.gesture_sequence) {
+        setGestureSequence(result.gesture_sequence);
+      }
+
+      // Draw hand landmarks on canvas if available
+      if (result.hand_info && canvasRef.current) {
+        drawHandInfo(canvasRef.current, result.hand_info);
+      }
 
       // Only add meaningful signs (not "unknown" with low confidence)
       if (
@@ -126,6 +148,46 @@ const SignToText = () => {
       console.error("Error processing frame:", err);
     } finally {
       setIsProcessing(false);
+    }
+  };
+  
+  // Helper function to draw hand information
+  const drawHandInfo = (canvas: HTMLCanvasElement, handInfo: any) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx || !videoRef.current) return;
+    
+    // Set canvas dimensions to match video
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw hand detection info
+    if (handInfo.thumb_tip && handInfo.index_tip) {
+      const thumbX = handInfo.thumb_tip[0] * canvas.width;
+      const thumbY = handInfo.thumb_tip[1] * canvas.height;
+      const indexX = handInfo.index_tip[0] * canvas.width;
+      const indexY = handInfo.index_tip[1] * canvas.height;
+      
+      // Draw points
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+      ctx.beginPath();
+      ctx.arc(thumbX, thumbY, 8, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
+      ctx.beginPath();
+      ctx.arc(indexX, indexY, 8, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      // Draw line between points
+      ctx.strokeStyle = 'rgba(255, 255, 0, 0.7)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(thumbX, thumbY);
+      ctx.lineTo(indexX, indexY);
+      ctx.stroke();
     }
   };
 
@@ -160,6 +222,13 @@ const SignToText = () => {
     // Remove the selected text from history
     setCaptionHistory((prev) => prev.filter((item) => item !== text));
   };
+  
+  // Toggle detection mode
+  const toggleDetectionMode = () => {
+    setDetectionMode(prev => prev === "static" ? "dynamic" : "static");
+    // Reset recognition when switching modes
+    clearText();
+  };
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -170,15 +239,42 @@ const SignToText = () => {
             Translate Indian Sign Language gestures into text in real-time
           </p>
         </div>
+        
+        {/* Mode Selection */}
+        <div className="flex justify-center mb-6">
+          <div className="inline-flex rounded-md shadow-sm" role="group">
+            <Button 
+              variant={detectionMode === "static" ? "default" : "outline"}
+              className="rounded-r-none"
+              onClick={() => detectionMode !== "static" && toggleDetectionMode()}
+            >
+              Static Sign Mode
+            </Button>
+            <Button 
+              variant={detectionMode === "dynamic" ? "default" : "outline"}
+              className="rounded-l-none"
+              onClick={() => detectionMode !== "dynamic" && toggleDetectionMode()}
+            >
+              Dynamic Gesture Mode
+            </Button>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Camera View */}
           <div className="md:col-span-2">
             <Card className="overflow-hidden">
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Camera className="mr-2 h-5 w-5" />
-                  Camera Feed
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Camera className="mr-2 h-5 w-5" />
+                    Camera Feed
+                  </div>
+                  {handDetected && (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                      Hand Detected
+                    </Badge>
+                  )}
                 </CardTitle>
                 <CardDescription>
                   Position your hands clearly in front of the camera
@@ -226,6 +322,24 @@ const SignToText = () => {
                   ref={canvasRef}
                   className="absolute top-0 left-0 w-full h-full hand-canvas"
                 ></canvas>
+                
+                {/* Confidence indicator */}
+                {isActive && handDetected && (
+                  <div className="absolute bottom-2 left-2 right-2 bg-black/40 text-white p-2 rounded-md">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span>Confidence</span>
+                      <span>{confidenceLevel.toFixed(0)}%</span>
+                    </div>
+                    <Progress value={confidenceLevel} className="h-2" />
+                  </div>
+                )}
+                
+                {/* Gesture sequence indicator */}
+                {isActive && detectionMode === "dynamic" && gestureSequence && (
+                  <div className="absolute top-2 left-2 bg-blue-600/80 text-white px-3 py-1 rounded-full text-xs">
+                    Recording: {gestureSequence.frame_count} frames
+                  </div>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between pt-4">
                 <div className="flex gap-2">
@@ -266,14 +380,14 @@ const SignToText = () => {
           <div className="md:col-span-1">
             <Card className="h-full flex flex-col">
               <CardHeader>
-                <CardTitle>
-                  Recognized Text
+                <CardTitle className="flex items-center justify-between">
+                  <span>Recognized Text</span>
                   {isProcessing && (
                     <span className="ml-2 inline-block h-2 w-2 animate-pulse rounded-full bg-translator-primary"></span>
                   )}
                 </CardTitle>
                 <CardDescription>
-                  Signs detected from your gestures
+                  {detectionMode === "static" ? "Signs detected from your gestures" : "Dynamic gestures recognized from movement"}
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex-1 overflow-y-auto">
@@ -288,6 +402,17 @@ const SignToText = () => {
                     </p>
                   )}
                 </div>
+                
+                {detectionMode === "dynamic" && (
+                  <Alert className="mt-3">
+                    <InfoIcon className="h-4 w-4" />
+                    <AlertTitle>Dynamic Gesture Mode</AlertTitle>
+                    <AlertDescription>
+                      Move your hands continuously to capture dynamic gestures. 
+                      The system will analyze movement patterns over time.
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 {captionHistory.length > 0 && (
                   <div className="mt-4">
@@ -350,6 +475,7 @@ const SignToText = () => {
             <ol className="list-decimal list-inside space-y-2">
               <li>Position yourself in front of the camera with good lighting</li>
               <li>Click "Start Recognition" to begin detecting sign language</li>
+              <li>Choose between Static Sign mode (for individual gestures) or Dynamic Gesture mode (for movement patterns)</li>
               <li>Perform Indian Sign Language gestures clearly</li>
               <li>The system will translate recognized signs into text</li>
               <li>Use "Clear" to start over or "Copy" to copy the text</li>
@@ -361,6 +487,7 @@ const SignToText = () => {
                 <li>Use clear, deliberate movements</li>
                 <li>Maintain consistent lighting</li>
                 <li>Avoid busy or cluttered backgrounds</li>
+                <li>In dynamic mode, make complete gestures with clear start and end positions</li>
               </ul>
             </div>
           </CardContent>
