@@ -9,6 +9,7 @@ import { HandMetal } from "lucide-react";
 import CameraView from "@/components/sign-to-text/CameraView";
 import RecognitionResults from "@/components/sign-to-text/RecognitionResults";
 import InstructionsCard from "@/components/sign-to-text/InstructionsCard";
+import TrainingMode from "@/components/sign-to-text/TrainingMode";
 
 const SignToText = () => {
   const [recognizedText, setRecognizedText] = useState("");
@@ -19,6 +20,7 @@ const SignToText = () => {
   const [handDetected, setHandDetected] = useState(false);
   const [confidenceLevel, setConfidenceLevel] = useState(0);
   const [detectionMode, setDetectionMode] = useState<"static" | "dynamic">("static");
+  const [viewMode, setViewMode] = useState<"recognition" | "training">("recognition");
   const [gestureSequence, setGestureSequence] = useState<any>(null);
   const { toast } = useToast();
 
@@ -221,6 +223,15 @@ const SignToText = () => {
     clearText();
   };
 
+  // Toggle between recognition and training modes
+  const toggleViewMode = () => {
+    setViewMode(prev => prev === "recognition" ? "training" : "recognition");
+    // Stop capturing when switching modes
+    if (isCapturing) {
+      stopContinuousCapture();
+    }
+  };
+
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="max-w-5xl mx-auto">
@@ -232,7 +243,7 @@ const SignToText = () => {
         </div>
         
         {/* Mode Selection */}
-        <div className="flex justify-center mb-6">
+        <div className="flex flex-col sm:flex-row justify-center gap-4 mb-6">
           <div className="inline-flex rounded-md shadow-sm" role="group">
             <Button 
               variant={detectionMode === "static" ? "default" : "outline"}
@@ -247,6 +258,23 @@ const SignToText = () => {
               onClick={() => detectionMode !== "dynamic" && toggleDetectionMode()}
             >
               Dynamic Gesture Mode
+            </Button>
+          </div>
+          
+          <div className="inline-flex rounded-md shadow-sm" role="group">
+            <Button 
+              variant={viewMode === "recognition" ? "default" : "outline"}
+              className="rounded-r-none"
+              onClick={() => viewMode !== "recognition" && toggleViewMode()}
+            >
+              Recognition
+            </Button>
+            <Button 
+              variant={viewMode === "training" ? "default" : "outline"}
+              className="rounded-l-none"
+              onClick={() => viewMode !== "training" && toggleViewMode()}
+            >
+              Training
             </Button>
           </div>
         </div>
@@ -273,23 +301,33 @@ const SignToText = () => {
             />
           </div>
 
-          {/* Recognition Results */}
+          {/* Recognition Results or Training Mode */}
           <div className="md:col-span-1">
-            <RecognitionResults
-              recognizedText={recognizedText}
-              captionHistory={captionHistory}
-              isProcessing={isProcessing}
-              isCapturing={isCapturing}
-              detectionMode={detectionMode}
-              clearText={clearText}
-              copyToClipboard={copyToClipboard}
-              restoreFromHistory={restoreFromHistory}
-            />
+            {viewMode === "recognition" ? (
+              <RecognitionResults
+                recognizedText={recognizedText}
+                captionHistory={captionHistory}
+                isProcessing={isProcessing}
+                isCapturing={isCapturing}
+                detectionMode={detectionMode}
+                clearText={clearText}
+                copyToClipboard={copyToClipboard}
+                restoreFromHistory={restoreFromHistory}
+              />
+            ) : (
+              <TrainingMode
+                videoRef={videoRef}
+                canvasRef={canvasRef}
+                isActive={isActive}
+                isLoading={isLoading}
+                captureImage={captureImage}
+              />
+            )}
           </div>
         </div>
 
-        {/* Instructions */}
-        <InstructionsCard />
+        {/* Only show instructions in recognition mode */}
+        {viewMode === "recognition" && <InstructionsCard />}
       </div>
     </div>
   );
