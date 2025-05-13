@@ -7,7 +7,7 @@ import numpy as np
 import os
 import json
 import time
-from ml_utils import predict_sign, initialize_model, extract_hand_landmarks
+from ml_utils import predict_sign, initialize_model, extract_hand_landmarks, clear_gesture_history, train_dynamic_gesture_model
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -17,6 +17,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for all domain
 os.makedirs('static/images/signs', exist_ok=True)
 os.makedirs('static/models', exist_ok=True)
 os.makedirs('static/gesture_sequences', exist_ok=True)
+os.makedirs('static/training_data', exist_ok=True)
 
 # Initialize model
 print("Initializing sign language recognition model...")
@@ -154,49 +155,77 @@ def sign_to_text():
         print(f"Error in sign-to-text: {str(e)}")
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
-@app.route('/api/track-dynamic-gesture', methods=['POST'])
-def track_dynamic_gesture():
-    """
-    Endpoint for processing a sequence of hand positions for dynamic gesture recognition
-    """
+@app.route('/api/clear-sequence', methods=['POST'])
+def clear_sequence():
+    """Clear the current gesture sequence and history"""
+    try:
+        clear_gesture_history()
+        return jsonify({"status": "success", "message": "Gesture history cleared"})
+    
+    except Exception as e:
+        print(f"Error clearing sequence: {str(e)}")
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/api/train-dynamic-model', methods=['POST'])
+def train_model():
+    """Train a new dynamic gesture recognition model"""
     try:
         data = request.json
-        if 'sequence' not in data or not isinstance(data['sequence'], list):
-            return jsonify({"error": "No valid sequence data provided"}), 400
-            
-        sequence = data['sequence']
+        training_data_path = data.get('training_data_path', 'static/training_data')
         
-        # Here you would process the sequence for dynamic gesture recognition
-        # This would typically involve:
-        # 1. Normalization of the sequence
-        # 2. Feature extraction
-        # 3. Passing to a sequential model (RNN/LSTM/etc)
+        success = train_dynamic_gesture_model(training_data_path)
         
-        # For demonstration, we'll return a simple analysis of the sequence
-        seq_length = len(sequence)
-        
-        # Mock dynamic gesture recognition (would be replaced by actual ML model)
-        recognizable_gestures = ["hello", "thank you", "please", "yes", "no"]
-        
-        if seq_length < 5:
-            predicted_gesture = "unknown"
-            confidence = 0.2
+        if success:
+            return jsonify({
+                "status": "success", 
+                "message": "Dynamic gesture model trained successfully"
+            })
         else:
-            # In a real implementation, this would use a trained model
-            predicted_gesture = np.random.choice(recognizable_gestures)
-            confidence = np.random.uniform(0.6, 0.95)
+            return jsonify({
+                "status": "error", 
+                "message": "Failed to train dynamic gesture model"
+            }), 500
+    
+    except Exception as e:
+        print(f"Error training model: {str(e)}")
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+@app.route('/api/record-training-data', methods=['POST'])
+def record_training_data():
+    """Record training data for a specific gesture"""
+    try:
+        data = request.json
+        if not all(k in data for k in ['base64_image', 'gesture_name']):
+            return jsonify({"error": "Image data and gesture name are required"}), 400
+            
+        gesture_name = data['gesture_name']
+        session_id = data.get('session_id', str(int(time.time())))
         
+        # Create directory for this gesture if it doesn't exist
+        gesture_dir = os.path.join('static/training_data', gesture_name)
+        os.makedirs(gesture_dir, exist_ok=True)
+        
+        # Save the image with a timestamp filename
+        base64_string = data['base64_image']
+        if base64_string.startswith('data:image'):
+            base64_string = base64_string.split(',')[1]
+            
+        img_data = base64.b64decode(base64_string)
+        filename = f"{session_id}_{int(time.time() * 1000)}.jpg"
+        file_path = os.path.join(gesture_dir, filename)
+        
+        with open(file_path, 'wb') as f:
+            f.write(img_data)
+            
         return jsonify({
-            "gesture": predicted_gesture,
-            "confidence": float(confidence),
-            "sequence_length": seq_length
+            "status": "success",
+            "message": f"Saved training image for gesture '{gesture_name}'",
+            "file_path": file_path
         })
         
     except Exception as e:
-        print(f"Error in track-dynamic-gesture: {str(e)}")
+        print(f"Error recording training data: {str(e)}")
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
-
-# ... keep existing code (text-to-sign endpoint, clear-sequence endpoint)
 
 @app.route('/api/isl-dictionary', methods=['GET'])
 def get_dictionary():

@@ -5,6 +5,9 @@ const API_BASE_URL = "http://localhost:5000/api";
 export interface SignToTextResponse {
   sign: string;
   confidence: number;
+  hand_detected?: boolean;
+  hand_info?: any;
+  gesture_sequence?: any;
   error?: string;
 }
 
@@ -92,6 +95,54 @@ export const clearSignSequence = async (): Promise<{ status: string }> => {
   } catch (error) {
     console.error("Error clearing sequence:", error);
     return { status: "error" };
+  }
+};
+
+export const recordTrainingData = async (base64Image: string, gestureName: string, sessionId?: string): Promise<any> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/record-training-data`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ 
+        base64_image: base64Image, 
+        gesture_name: gestureName,
+        session_id: sessionId
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to record training data");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error recording training data:", error);
+    return { status: "error", error: (error as Error).message };
+  }
+};
+
+export const trainDynamicModel = async (trainingDataPath?: string): Promise<any> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/train-dynamic-model`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ training_data_path: trainingDataPath }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to train model");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error training model:", error);
+    return { status: "error", error: (error as Error).message };
   }
 };
 

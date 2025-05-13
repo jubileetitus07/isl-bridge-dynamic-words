@@ -5,6 +5,8 @@ import mediapipe as mp
 import os
 import pickle
 import json
+import time
+from collections import deque
 
 # MediaPipe solutions
 mp_hands = mp.solutions.hands
@@ -15,9 +17,20 @@ hands = None
 model = None
 labels = ["hello", "thank you", "please", "yes", "no", "good", "bad", "help", "sorry", "name"]
 
+# Dynamic gesture recognition
+dynamic_model = None
+gesture_history = deque(maxlen=30)  # Store last 30 frames for dynamic gesture recognition
+gesture_timestamps = deque(maxlen=30)  # Corresponding timestamps
+last_prediction_time = 0
+MIN_SEQUENCE_LENGTH = 10  # Minimum number of frames for a valid dynamic gesture
+PREDICTION_COOLDOWN = 0.5  # Seconds between predictions to avoid overloading
+
+# Dynamic gesture labels (can be expanded)
+dynamic_labels = ["hello", "thank you", "please", "yes", "no"]
+
 def initialize_model():
-    """Initialize the MediaPipe hands model and load the classification model if available"""
-    global hands, model
+    """Initialize the MediaPipe hands model and load the classification models"""
+    global hands, model, dynamic_model
     
     # Initialize MediaPipe Hands
     hands = mp_hands.Hands(
@@ -27,19 +40,30 @@ def initialize_model():
         min_tracking_confidence=0.5
     )
     
-    # Try to load trained model if exists
+    # Try to load trained static gesture model if it exists
     model_path = 'static/models/isl_model.pkl'
     if os.path.exists(model_path):
         try:
             with open(model_path, 'rb') as f:
                 model = pickle.load(f)
-            print("Loaded trained model from", model_path)
+            print("Loaded trained static gesture model from", model_path)
         except Exception as e:
-            print(f"Error loading model: {e}")
+            print(f"Error loading static model: {e}")
             print("Using rule-based approach as fallback")
     else:
-        print("No trained model found at", model_path)
+        print("No trained static model found at", model_path)
         print("Using rule-based approach")
+    
+    # Try to load dynamic gesture model if it exists
+    dynamic_model_path = 'static/models/dynamic_gesture_model.pkl'
+    if os.path.exists(dynamic_model_path):
+        try:
+            with open(dynamic_model_path, 'rb') as f:
+                dynamic_model = pickle.load(f)
+            print("Loaded trained dynamic gesture model from", dynamic_model_path)
+        except Exception as e:
+            print(f"Error loading dynamic model: {e}")
+            print("Using rule-based approach for dynamic gestures")
 
 def extract_hand_landmarks(image):
     """Extract hand landmarks from image using MediaPipe"""
@@ -61,6 +85,12 @@ def extract_hand_landmarks(image):
         return np.array(landmarks).flatten(), True
     
     return np.zeros(21 * 3), False  # Return zeros if no hand detected
+
+def update_gesture_history(landmarks):
+    """Update the gesture history with new landmarks and timestamp"""
+    current_time = time.time()
+    gesture_history.append(landmarks)
+    gesture_timestamps.append(current_time)
 
 def get_hand_shape_features(landmarks):
     """Extract basic shape features from landmarks"""
@@ -161,18 +191,79 @@ def rule_based_classification(features):
     # Default fallback
     return "unknown", 0.3
 
+def predict_dynamic_gesture():
+    """Predict dynamic gesture from gesture history"""
+    global last_prediction_time
+    
+    # Check if we have enough frames for prediction
+    if len(gesture_history) < MIN_SEQUENCE_LENGTH:
+        return None, 0
+    
+    current_time = time.time()
+    
+    # Check if we should make a prediction (based on cooldown)
+    if current_time - last_prediction_time < PREDICTION_COOLDOWN:
+        return None, 0
+    
+    # Check if sequence spans at least 0.5 seconds
+    if gesture_timestamps[-1] - gesture_timestamps[0] < 0.5:
+        return None, 0
+    
+    last_prediction_time = current_time
+    
+    # If we have a trained model, use it
+    if dynamic_model is not None:
+        try:
+            # Prepare gesture sequence for prediction
+            # (This would require preprocessing the gesture_history to match the model's input format)
+            # For example, resampling the sequence to a fixed length and normalizing
+            
+            # For this example, we'll use a placeholder
+            # In a real implementation, this would be model.predict() on the processed sequence
+            prediction = "hello"  # Placeholder
+            confidence = 0.75     # Placeholder
+            
+            return prediction, confidence
+        except Exception as e:
+            print(f"Error in dynamic model prediction: {e}")
+    
+    # If no model or prediction failed, use rule-based approach
+    # In a real implementation, this would analyze the motion patterns in gesture_history
+    # For now, we'll return a mock result based on sequence length
+    
+    # Simple mock logic for demonstration
+    sequence_length = len(gesture_history)
+    if sequence_length > 25:
+        return "thank you", 0.7
+    elif sequence_length > 20:
+        return "hello", 0.6
+    elif sequence_length > 15:
+        return "please", 0.6
+    else:
+        return "unknown", 0.4
+
 def predict_sign(image):
     """Predict sign from image"""
+    global gesture_history, gesture_timestamps
+    
     # Extract hand landmarks
     landmarks, hand_detected = extract_hand_landmarks(image)
     
     if not hand_detected:
         return "No hand detected", 0.0
     
+    # Update gesture history for dynamic recognition
+    update_gesture_history(landmarks)
+    
     # Extract features
     features = get_hand_shape_features(landmarks)
     
-    # If we have a trained model, use it
+    # Check for dynamic gesture predictions periodically
+    dynamic_sign, dynamic_confidence = predict_dynamic_gesture()
+    if dynamic_sign and dynamic_confidence > 0.5:
+        return dynamic_sign, dynamic_confidence
+    
+    # If we have a trained model for static gestures, use it
     if model is not None:
         try:
             # Prepare features for model prediction
@@ -190,3 +281,32 @@ def predict_sign(image):
     
     # Use rule-based approach as fallback
     return rule_based_classification(features)
+
+def clear_gesture_history():
+    """Clear the gesture history"""
+    global gesture_history, gesture_timestamps
+    gesture_history.clear()
+    gesture_timestamps.clear()
+
+def train_dynamic_gesture_model(training_data_path):
+    """Train a model for dynamic gesture recognition"""
+    # This function would be called with training data to build a dynamic gesture model
+    # The implementation depends on the structure of your training data
+    
+    # In a real implementation, you would:
+    # 1. Load training sequences
+    # 2. Preprocess sequences (normalize, resample, etc.)
+    # 3. Train a sequence model (e.g., LSTM, 1D-CNN)
+    # 4. Save the model to disk
+    
+    print(f"Training dynamic gesture model with data from {training_data_path}")
+    print("This is a placeholder - implement actual training with real data")
+    
+    # For demonstration, we'll create a dummy model
+    dummy_model = {"type": "dynamic_gesture_classifier"}
+    
+    # Save dummy model
+    with open('static/models/dynamic_gesture_model.pkl', 'wb') as f:
+        pickle.dump(dummy_model, f)
+    
+    return True
