@@ -1,23 +1,14 @@
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import useWebcam from "@/hooks/useWebcam";
 import { translateSignToText } from "@/lib/api";
-import { Camera, Pause, Play, Delete, Copy, HandMetal } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { InfoIcon } from "lucide-react";
+import { HandMetal } from "lucide-react";
+import CameraView from "@/components/sign-to-text/CameraView";
+import RecognitionResults from "@/components/sign-to-text/RecognitionResults";
+import InstructionsCard from "@/components/sign-to-text/InstructionsCard";
 
 const SignToText = () => {
   const [recognizedText, setRecognizedText] = useState("");
@@ -263,235 +254,42 @@ const SignToText = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Camera View */}
           <div className="md:col-span-2">
-            <Card className="overflow-hidden">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Camera className="mr-2 h-5 w-5" />
-                    Camera Feed
-                  </div>
-                  {handDetected && (
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                      Hand Detected
-                    </Badge>
-                  )}
-                </CardTitle>
-                <CardDescription>
-                  Position your hands clearly in front of the camera
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0 relative bg-muted/50 aspect-video">
-                {/* Show a placeholder when camera is not active */}
-                {!isActive && !isLoading && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <HandMetal className="h-16 w-16 text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground text-center px-4">
-                      {isCameraSupported
-                        ? "Camera is not active. Click 'Start Camera' to begin."
-                        : "Camera access is not supported in your browser."}
-                    </p>
-                    {isCameraSupported && (
-                      <Button
-                        onClick={() => startCamera()}
-                        className="mt-4"
-                        disabled={isLoading}
-                      >
-                        {isLoading ? "Starting..." : "Start Camera"}
-                      </Button>
-                    )}
-                  </div>
-                )}
-
-                {/* Show loading state */}
-                {isLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="loader"></div>
-                  </div>
-                )}
-
-                {/* Video element */}
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover mirror-video"
-                  playsInline
-                  muted
-                ></video>
-                
-                {/* Canvas overlay for drawing hand landmarks */}
-                <canvas
-                  ref={canvasRef}
-                  className="absolute top-0 left-0 w-full h-full hand-canvas"
-                ></canvas>
-                
-                {/* Confidence indicator */}
-                {isActive && handDetected && (
-                  <div className="absolute bottom-2 left-2 right-2 bg-black/40 text-white p-2 rounded-md">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span>Confidence</span>
-                      <span>{confidenceLevel.toFixed(0)}%</span>
-                    </div>
-                    <Progress value={confidenceLevel} className="h-2" />
-                  </div>
-                )}
-                
-                {/* Gesture sequence indicator */}
-                {isActive && detectionMode === "dynamic" && gestureSequence && (
-                  <div className="absolute top-2 left-2 bg-blue-600/80 text-white px-3 py-1 rounded-full text-xs">
-                    Recording: {gestureSequence.frame_count} frames
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter className="flex justify-between pt-4">
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => toggleCapturing()}
-                    disabled={!isActive || isLoading}
-                    variant={isCapturing ? "secondary" : "default"}
-                  >
-                    {isCapturing ? (
-                      <>
-                        <Pause className="mr-2 h-4 w-4" /> Pause
-                      </>
-                    ) : (
-                      <>
-                        <Play className="mr-2 h-4 w-4" /> Start Recognition
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    onClick={takeSingleCapture}
-                    disabled={!isActive || isLoading || isCapturing}
-                    variant="outline"
-                  >
-                    <Camera className="mr-2 h-4 w-4" /> Capture
-                  </Button>
-                </div>
-                <Button
-                  onClick={() => (isActive ? stopCamera() : startCamera())}
-                  variant="outline"
-                >
-                  {isActive ? "Stop Camera" : "Start Camera"}
-                </Button>
-              </CardFooter>
-            </Card>
+            <CameraView
+              isActive={isActive}
+              isLoading={isLoading}
+              videoRef={videoRef}
+              canvasRef={canvasRef}
+              handDetected={handDetected}
+              confidenceLevel={confidenceLevel}
+              isCapturing={isCapturing}
+              isProcessing={isProcessing}
+              detectionMode={detectionMode}
+              gestureSequence={gestureSequence}
+              startCamera={startCamera}
+              stopCamera={stopCamera}
+              toggleCapturing={toggleCapturing}
+              takeSingleCapture={takeSingleCapture}
+              isCameraSupported={isCameraSupported}
+            />
           </div>
 
           {/* Recognition Results */}
           <div className="md:col-span-1">
-            <Card className="h-full flex flex-col">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Recognized Text</span>
-                  {isProcessing && (
-                    <span className="ml-2 inline-block h-2 w-2 animate-pulse rounded-full bg-translator-primary"></span>
-                  )}
-                </CardTitle>
-                <CardDescription>
-                  {detectionMode === "static" ? "Signs detected from your gestures" : "Dynamic gestures recognized from movement"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-y-auto">
-                <div className="min-h-[150px] p-3 border rounded-md bg-background">
-                  {recognizedText ? (
-                    <p>{recognizedText}</p>
-                  ) : (
-                    <p className="text-muted-foreground">
-                      {isCapturing
-                        ? "Waiting for signs to be detected..."
-                        : "Start recognition to see translated text here"}
-                    </p>
-                  )}
-                </div>
-                
-                {detectionMode === "dynamic" && (
-                  <Alert className="mt-3">
-                    <InfoIcon className="h-4 w-4" />
-                    <AlertTitle>Dynamic Gesture Mode</AlertTitle>
-                    <AlertDescription>
-                      Move your hands continuously to capture dynamic gestures. 
-                      The system will analyze movement patterns over time.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {captionHistory.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm font-medium mb-2">Recent History:</p>
-                    <div className="space-y-2 max-h-[150px] overflow-y-auto">
-                      {captionHistory.map((text, index) => (
-                        <div
-                          key={index}
-                          className="p-2 border rounded-md text-sm flex justify-between items-center hover:bg-accent cursor-pointer"
-                          onClick={() => restoreFromHistory(text)}
-                        >
-                          <p className="truncate">{text}</p>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              restoreFromHistory(text);
-                            }}
-                          >
-                            ↑
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter className="border-t pt-4">
-                <div className="flex gap-2 w-full">
-                  <Button
-                    onClick={clearText}
-                    variant="outline"
-                    className="flex-1"
-                    disabled={!recognizedText}
-                  >
-                    <Delete className="mr-2 h-4 w-4" /> Clear
-                  </Button>
-                  <Button
-                    onClick={copyToClipboard}
-                    variant="outline"
-                    className="flex-1"
-                    disabled={!recognizedText}
-                  >
-                    <Copy className="mr-2 h-4 w-4" /> Copy
-                  </Button>
-                </div>
-              </CardFooter>
-            </Card>
+            <RecognitionResults
+              recognizedText={recognizedText}
+              captionHistory={captionHistory}
+              isProcessing={isProcessing}
+              isCapturing={isCapturing}
+              detectionMode={detectionMode}
+              clearText={clearText}
+              copyToClipboard={copyToClipboard}
+              restoreFromHistory={restoreFromHistory}
+            />
           </div>
         </div>
 
         {/* Instructions */}
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle>How to Use</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ol className="list-decimal list-inside space-y-2">
-              <li>Position yourself in front of the camera with good lighting</li>
-              <li>Click "Start Recognition" to begin detecting sign language</li>
-              <li>Choose between Static Sign mode (for individual gestures) or Dynamic Gesture mode (for movement patterns)</li>
-              <li>Perform Indian Sign Language gestures clearly</li>
-              <li>The system will translate recognized signs into text</li>
-              <li>Use "Clear" to start over or "Copy" to copy the text</li>
-            </ol>
-            <div className="mt-4 p-4 bg-translator-light/50 rounded-md">
-              <p className="text-sm font-medium">Tips for better recognition:</p>
-              <ul className="list-disc list-inside text-sm mt-2 space-y-1">
-                <li>Ensure your hands are clearly visible in the frame</li>
-                <li>Use clear, deliberate movements</li>
-                <li>Maintain consistent lighting</li>
-                <li>Avoid busy or cluttered backgrounds</li>
-                <li>In dynamic mode, make complete gestures with clear start and end positions</li>
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
+        <InstructionsCard />
       </div>
     </div>
   );
